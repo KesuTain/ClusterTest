@@ -10,14 +10,71 @@ public class Cluster
     public Vector3 position = new Vector3(0,0,0);
     public GameObject Label;
 
+
+    public int Size { get { return Elements.Count; } set { } }
+
     public Cluster()
     {
 
     }
 
+    public void Add(GameObject obj)
+    {
+        if (!this.Elements.Contains(obj))
+        {
+            this.Elements.Add(obj);
+            this.CalculateCenter();
+        }
+    }
+
+    public void CalculateCenter()
+    {
+        Vector3 center = Vector3.zero;
+        foreach (GameObject obj in this.Elements)
+        {
+            center += obj.transform.position;
+        }
+        this.position = center / this.Elements.Count;
+    }
+
+    public void Remove(GameObject obj)
+    {
+        this.Elements.Remove(obj);
+        this.CalculateCenter();
+    }
+
+    public bool Empty()
+    {
+        if (this.Elements.Count == 0)
+            return true;
+        else
+            return false;
+    }
+
+    public bool Single()
+    {
+        if (this.Elements.Count == 1)
+            return true;
+        else
+            return false;
+    }
+
+    public bool Contains(GameObject obj)
+    {
+        if (this.Elements.Contains(obj))
+            return true;
+        else
+            return false;
+    }
+
     public Cluster(int type)
     {
         this.type = type;
+    }
+
+    public Cluster(GameObject obj)
+    {
+        this.Add(obj);
     }
 
     ~Cluster()
@@ -32,18 +89,25 @@ public class Clusterator : MonoBehaviour
     public float MinDist = 1;
     public List<Cluster> Clusters = new List<Cluster>();
     public GameObject Label;
+
+    public CameraController CC;
     // Start is called before the first frame update
     void Start()
     {
-        //StartCoroutine(FormClusters());
+        FormClusters();
     }
 
     // Update is called once per frame
-    void LateUpdate()
+    void FixedUpdate()
     {
-        FormClusters();
-        FormClustersCenters();
         ShowClusters();
+        ShowClustersCenters();
+    }
+
+    public void Main()
+    {
+        MinDist = CC.CurrentZoom / 5;
+        FormClusters();
     }
 
     public void FormClusters()
@@ -52,12 +116,6 @@ public class Clusterator : MonoBehaviour
         for (int i = 0; i < Items.Length; i++)
         {
             Cluster cluster = GetClusterOfObject(Items[i]);
-
-            if (cluster == null)
-            {
-                cluster = new Cluster();
-                cluster.Elements.Add(Items[i]);
-            }
 
             int objType = GetTypeOfObject(Items[i]);
             if(objType != -1)
@@ -68,33 +126,55 @@ public class Clusterator : MonoBehaviour
                     {
                         if(objType == GetTypeOfObject(Items[j]))
                         {
-                            Cluster objCluster = GetClusterOfObject(Items[j]);
+                            float currentDist = Vector3.Distance(Items[i].transform.position, Items[j].transform.position);
 
-                            if (Vector3.Distance(Items[i].transform.position, Items[j].transform.position) <= MinDist)
+                            Cluster jCluster = GetClusterOfObject(Items[j]);
+
+                            if (currentDist <= MinDist)
                             {
-                                GameObject addObject = Items[j];
-                                if (objCluster != null)
+                                if (cluster.Size >= jCluster.Size)
                                 {
-                                    Clusters.Remove(cluster);
-                                    cluster = objCluster;
-                                    addObject = Items[i];
+                                    jCluster.Remove(Items[j]);
+                                    cluster.Add(Items[j]);
+
+                                    if (jCluster.Empty())
+                                        Clusters.Remove(jCluster);
                                 }
-                                if(!cluster.Elements.Contains(addObject))
-                                    cluster.Elements.Add(addObject);
+                                else
+                                {
+                                    cluster.Remove(Items[i]);
+                                    jCluster.Add(Items[i]);
+                                    break;
+                                }
                             }
                             else
                             {
-                                GameObject removeObject = Items[j];
-                                cluster.Elements.Remove(removeObject);
-
+                                if (cluster.Size >= jCluster.Size)
+                                {
+                                    if(cluster.Contains(Items[j]))
+                                    {
+                                        cluster.Remove(Items[j]);
+                                        Clusters.Add(new Cluster(Items[j]));
+                                    }
+                                }
+                                else
+                                {
+                                    jCluster.Remove(Items[i]);
+                                    break;
+                                }
                             }
                         }
                     }
                 }
             }
 
-            if (!Clusters.Contains(cluster))
+            if (!Clusters.Contains(cluster) && cluster.Elements.Count > 0)
+            {
                 Clusters.Add(cluster);
+            }
+
+            if (cluster.Elements.Count == 0)
+                Clusters.Remove(cluster);
         }
     }
 
@@ -107,22 +187,17 @@ public class Clusterator : MonoBehaviour
                 return cluster;
             }
         }
-        return null;
+        return new Cluster(obj);
     }
 
-    public void FormClustersCenters()
+    public void ShowClustersCenters()
     {
         foreach(Cluster cluster in Clusters)
         {
-            Vector3 center = Vector3.zero;
             foreach (GameObject obj in cluster.Elements)
             {
-                center += obj.transform.position;
-            }
-            cluster.position = center / cluster.Elements.Count;
-
-            foreach (GameObject obj in cluster.Elements)
-            {
+                cluster.CalculateCenter();
+                cluster.Label = Instantiate<GameObject>(Label, cluster.position, Quaternion.identity);
                 Debug.DrawLine(obj.transform.position, cluster.position);
             }
         }
@@ -154,24 +229,5 @@ public class Clusterator : MonoBehaviour
                 break;
         }
         return type;
-    }
-
-    public Cluster GetClusterOfType(int type)
-    {
-        Cluster foundedCluster = null;
-        foreach (Cluster cluster in Clusters)
-        {
-            if(cluster.type == type)
-            {
-                foundedCluster = cluster;
-                break;
-            }
-        }
-        if(foundedCluster == null)
-        {
-            foundedCluster = new Cluster(type);
-            Clusters.Add(foundedCluster);
-        }
-        return foundedCluster;
     }
 }
