@@ -9,8 +9,8 @@ public class Cluster
     public List<GameObject> Elements = new List<GameObject>();
     public Vector3 position = new Vector3(0,0,0);
     public GameObject Label;
-
-
+    private Vector3 center;
+    
     public int Size { get { return Elements.Count; } set { } }
 
     public Cluster()
@@ -29,7 +29,7 @@ public class Cluster
 
     public void CalculateCenter()
     {
-        Vector3 center = Vector3.zero;
+        center = Vector3.zero;
         foreach (GameObject obj in this.Elements)
         {
             center += obj.transform.position;
@@ -88,26 +88,28 @@ public class Clusterator : MonoBehaviour
     public GameObject[] Items;
     public float MinDist = 1;
     public List<Cluster> Clusters = new List<Cluster>();
-    public GameObject Label;
+    public GameObject FireWood;
+    public GameObject Berries;
+    public GameObject Flex;
 
     public CameraController CC;
-    // Start is called before the first frame update
     void Start()
     {
         FormClusters();
     }
 
-    // Update is called once per frame
     void FixedUpdate()
     {
         ShowClusters();
-        ShowClustersCenters();
+        DrawClustersCenters();
     }
 
     public void Main()
     {
         MinDist = CC.CurrentZoom / 5;
+        DeleteAllCenters();
         FormClusters();
+        ShowClustersCenters();
     }
 
     public void FormClusters()
@@ -117,21 +119,24 @@ public class Clusterator : MonoBehaviour
         {
             Cluster cluster = GetClusterOfObject(Items[i]);
 
-            int objType = GetTypeOfObject(Items[i]);
-            if(objType != -1)
+            cluster.type = GetTypeOfObject(Items[i]);
+            if(cluster.type != -1)
             {
                 for (int j = 0; j < Items.Length; j++)
                 {
                     if(i != j)
                     {
-                        if(objType == GetTypeOfObject(Items[j]))
+                        if(cluster.type == GetTypeOfObject(Items[j]))
                         {
                             float currentDist = Vector3.Distance(Items[i].transform.position, Items[j].transform.position);
 
                             Cluster jCluster = GetClusterOfObject(Items[j]);
 
+                            //Если дистанция между объектами меньше минимальной дистанции.
                             if (currentDist <= MinDist)
                             {
+                                //Если размер кластера больше размера соседнего кластера того же типа, 
+                                //то перенести в свой кластер.
                                 if (cluster.Size >= jCluster.Size)
                                 {
                                     jCluster.Remove(Items[j]);
@@ -149,8 +154,11 @@ public class Clusterator : MonoBehaviour
                             }
                             else
                             {
+                                //Если объектов больше в своём кластере, чем в соседнем.
                                 if (cluster.Size >= jCluster.Size)
                                 {
+                                    //Если в соседнем кластере есть тот же объект, что и своём, то удалить этот объект
+                                    //И создать новый кластер.
                                     if(cluster.Contains(Items[j]))
                                     {
                                         cluster.Remove(Items[j]);
@@ -168,16 +176,44 @@ public class Clusterator : MonoBehaviour
                 }
             }
 
+            //Сформировать кластер если его ещё нет и элементов больше 0
             if (!Clusters.Contains(cluster) && cluster.Elements.Count > 0)
             {
                 Clusters.Add(cluster);
             }
 
+            //Если элементов в кластере нет, то удалить его
             if (cluster.Elements.Count == 0)
                 Clusters.Remove(cluster);
         }
+        CheckSingleClasters();
     }
 
+    public void CheckSingleClasters()
+    {
+        //Проверка одиночных кластеров
+        foreach (Cluster cluster in Clusters)
+        {
+            if (cluster.Single() == true)
+            {
+                switch (cluster.Elements[0].GetComponent<Renderer>().material.name)
+                {
+                    case "Item1 (Instance)":
+                        cluster.type = 0;
+                        break;
+                    case "Item2 (Instance)":
+                        cluster.type = 1;
+                        break;
+                    case "Item3 (Instance)":
+                        cluster.type = 2;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+    //Проверяем есть ли объект в какой либо кластере.
     public Cluster GetClusterOfObject(GameObject obj)
     {
         foreach(Cluster cluster in Clusters)
@@ -197,12 +233,34 @@ public class Clusterator : MonoBehaviour
             foreach (GameObject obj in cluster.Elements)
             {
                 cluster.CalculateCenter();
-                cluster.Label = Instantiate<GameObject>(Label, cluster.position, Quaternion.identity);
-                Debug.DrawLine(obj.transform.position, cluster.position);
+            }
+            switch (cluster.type)
+            {
+                case 0:
+                    cluster.Label = Instantiate(FireWood, cluster.position + Vector3.up, Quaternion.identity);
+                    break;
+                case 1:
+                    cluster.Label = Instantiate(Flex, cluster.position + Vector3.up, Quaternion.identity);
+                    break;
+                case 2:
+                    cluster.Label = Instantiate(Berries, cluster.position + Vector3.up, Quaternion.identity);
+                    break;
+                default:
+                    break;
             }
         }
     }
 
+    void DrawClustersCenters()
+    {
+        foreach (Cluster cluster in Clusters)
+        {
+            foreach (GameObject obj in cluster.Elements)
+            {
+                Debug.DrawLine(obj.transform.position, cluster.position);
+            }
+        }
+    }
     public void ShowClusters()
     {
         foreach (Cluster cluster in Clusters)
@@ -229,5 +287,15 @@ public class Clusterator : MonoBehaviour
                 break;
         }
         return type;
+    }
+
+    void DeleteAllCenters()
+    {
+        GameObject[] Centers;
+        Centers = GameObject.FindGameObjectsWithTag("Label");
+        for (int i = 0; i < Centers.Length; i++)
+        {
+            Destroy(Centers[i]);
+        }
     }
 }
